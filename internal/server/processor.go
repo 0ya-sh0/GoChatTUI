@@ -13,7 +13,7 @@ var wsUpgrader = websocket.Upgrader{}
 var state = NewServerState()
 var noNameConnChan chan *websocket.Conn = make(chan *websocket.Conn, 1024)
 var joinUserChan chan JoinUserRequest = make(chan JoinUserRequest, 1024)
-var sendChatChan chan ChatMessage = make(chan ChatMessage, 1024)
+var sendChatChan chan MessageToClient = make(chan MessageToClient, 1024)
 var closeUserChan chan string = make(chan string, 1024)
 
 func ProcessWsConnect(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +144,7 @@ func (s *ServerState) AddUser(req JoinUserRequest) bool {
 				closeUserChan <- joinedUser.UserName
 				break
 			}
-			sendChatChan <- ChatMessage{
+			sendChatChan <- MessageToClient{
 				Type:         CHAT_TYPE,
 				FromUserName: joinedUser.UserName,
 				ToUserName:   message.ToUserName,
@@ -177,7 +177,7 @@ func (s *ServerState) BroadCast() {
 	}
 	s.usersMutex.Unlock()
 
-	message := BroadCastMessage{
+	message := MessageToClient{
 		Type:  BROADCAST_TYPE,
 		Users: keys,
 	}
@@ -231,15 +231,11 @@ type ChatMessageRequest struct {
 	Content    string `json:"content"`
 }
 
-type ChatMessage struct {
+type MessageToClient struct {
 	Type         string    `json:"type"`
 	FromUserName string    `json:"fromUserName"`
 	ToUserName   string    `json:"toUserName"`
 	Content      string    `json:"content"`
 	Timestamp    time.Time `json:"timestamp"`
-}
-
-type BroadCastMessage struct {
-	Type  string   `json:"type"`
-	Users []string `json:"users"`
+	Users        []string  `json:"users"`
 }
