@@ -35,6 +35,8 @@ const (
 	KEY_TYPE_ESC
 	KEY_TYPE_UP_ARROW
 	KEY_TYPE_DOWN_ARROW
+	KEY_TYPE_LEFT_ARROW
+	KEY_TYPE_RIGHT_ARROW
 	KEY_TYPE_ENTER
 	KEY_TYPE_BACKSPACE
 	KEY_TYPE_UNKNOWN
@@ -126,6 +128,18 @@ func readKey() (EventKeyPress, error) {
 						KeyType: KEY_TYPE_DOWN_ARROW,
 					}, nil
 				}
+
+				if string(seq) == string(KEY_LEFT) {
+					return EventKeyPress{
+						KeyType: KEY_TYPE_LEFT_ARROW,
+					}, nil
+				}
+
+				if string(seq) == string(KEY_RIGHT) {
+					return EventKeyPress{
+						KeyType: KEY_TYPE_RIGHT_ARROW,
+					}, nil
+				}
 				return EventKeyPress{
 					KeyType: KEY_TYPE_UNKNOWN,
 				}, nil
@@ -205,26 +219,75 @@ func printCurrentText(currentText string, height int) {
 	fmt.Printf(CursorPos, height-1, 1)
 	fmt.Print(Reset, SEP)
 	fmt.Printf(CursorPos, height, 1)
-	fmt.Print("↑ ↓ scroll chat     Enter: Send     Ctrl+C: Back")
+	fmt.Print("↑ ↓ Scroll chat     Enter: Send     Ctrl+C: Back")
 	fmt.Print(Reset)
 }
 
 const FIXED = 9
 
-func printUsers(users []string, userPos int, messages map[string]ChatData) {
-	i := 6
-	for pos, v := range users {
-		fmt.Print(Reset)
-		if pos == userPos {
-			fmt.Printf(CursorPos, i, 1)
-			fmt.Print(Bold, "▶ ")
-		} else {
-			fmt.Printf(CursorPos, i, 3)
-		}
-		i++
-		fmt.Print(v, " (", messages[v].unread, ")")
+func printUsers(unreadUsers, onlineUsers, offlineUsers []string, userPos int, messages map[string]ChatData, chosenTab, height int) {
+	line := 4
+	fmt.Printf(CursorPos, line, 1)
+	switch chosenTab {
+	case 0:
+		fmt.Print(" [ Unread ]   Online     Offline")
+	case 1:
+		fmt.Print("   Unread   [ Online ]   Offline")
+	default:
+		fmt.Print("   Unread     Online   [ Offline ]")
 	}
-	fmt.Print(Reset)
+	line = 5
+	fmt.Printf(CursorPos, line, 1)
+	fmt.Print(Reset, SEP)
+	line = 6
+	fmt.Printf(CursorPos, line, 1)
+
+	if chosenTab == 0 {
+		for pos, v := range unreadUsers {
+			fmt.Print(Reset)
+			if pos == userPos {
+				fmt.Printf(CursorPos, line, 1)
+				fmt.Print(Bold, "▶ ")
+			} else {
+				fmt.Printf(CursorPos, line, 3)
+			}
+			fmt.Print(v)
+			fmt.Printf(CursorPos, line, 12)
+			fmt.Print("(", messages[v].unread, ")")
+			line++
+		}
+	}
+
+	if chosenTab == 1 {
+		for pos, v := range onlineUsers {
+			fmt.Print(Reset)
+			if pos == userPos {
+				fmt.Printf(CursorPos, line, 1)
+				fmt.Print(Bold, "▶ ")
+			} else {
+				fmt.Printf(CursorPos, line, 3)
+			}
+			line++
+			fmt.Print(v)
+		}
+	}
+
+	if chosenTab == 2 {
+		for pos, v := range offlineUsers {
+			fmt.Print(Reset)
+			if pos == userPos {
+				fmt.Printf(CursorPos, line, 1)
+				fmt.Print(Bold, "▶ ")
+			} else {
+				fmt.Printf(CursorPos, line, 3)
+			}
+			line++
+			fmt.Print(v)
+		}
+	}
+
+	fmt.Printf(CursorPos, height, 1)
+	fmt.Print(Reset, "← → Switch tabs     ↑ ↓ Move     Enter: Open     Ctrl+C: Quit")
 }
 
 func printMessages(userName, chosenUser string, data ChatData, height, messageScroll int) {
@@ -291,13 +354,16 @@ func Start(userName string, url url.URL) error {
 	resizeEvents := make(chan int)
 	messageScroll := 0
 	messages := make(map[string]ChatData)
-	users := []string{}
+	unreadUsers := []string{}
+	onlineUsers := []string{}
+	offlineUsers := []string{}
 	activeUsers := make(map[string]bool)
 	userPos := 0
 	isMainScreen := true
 	chosenUser := ""
 	currentText := ""
 	currentChatData := ChatData{}
+	chosenTab := 0
 	_, height, err := term.GetSize(int(os.Stdin.Fd()))
 	if err != nil {
 		return err
@@ -309,7 +375,7 @@ func Start(userName string, url url.URL) error {
 		fmt.Print(ClearScreen, CursorHome, CursorHide)
 		printHeader(userName)
 		if isMainScreen {
-			printUsers(users, userPos, messages)
+			printUsers(unreadUsers, onlineUsers, offlineUsers, userPos, messages, chosenTab, height)
 		} else {
 			printUserName(chosenUser, activeUsers)
 			printMessages(userName, chosenUser, currentChatData, height, messageScroll)
@@ -353,8 +419,16 @@ func Start(userName string, url url.URL) error {
 
 			*/
 			if event.KeyType == KEY_TYPE_UP_ARROW {
-				if isMainScreen && len(users) > 0 {
-					userPos = (len(users) + userPos - 1) % len(users)
+				if isMainScreen {
+					if chosenTab == 0 && len(unreadUsers) > 0 {
+						userPos = (len(unreadUsers) + userPos - 1) % len(unreadUsers)
+					}
+					if chosenTab == 1 && len(onlineUsers) > 0 {
+						userPos = (len(onlineUsers) + userPos - 1) % len(onlineUsers)
+					}
+					if chosenTab == 2 && len(offlineUsers) > 0 {
+						userPos = (len(offlineUsers) + userPos - 1) % len(offlineUsers)
+					}
 				}
 				if !isMainScreen && len(currentChatData.messages) > (height-FIXED) {
 					if messageScroll > 0 {
@@ -363,8 +437,16 @@ func Start(userName string, url url.URL) error {
 				}
 			}
 			if event.KeyType == KEY_TYPE_DOWN_ARROW {
-				if isMainScreen && len(users) > 0 {
-					userPos = (len(users) + userPos + 1) % len(users)
+				if isMainScreen {
+					if chosenTab == 0 && len(unreadUsers) > 0 {
+						userPos = (len(unreadUsers) + userPos + 1) % len(unreadUsers)
+					}
+					if chosenTab == 1 && len(onlineUsers) > 0 {
+						userPos = (len(onlineUsers) + userPos + 1) % len(onlineUsers)
+					}
+					if chosenTab == 2 && len(offlineUsers) > 0 {
+						userPos = (len(offlineUsers) + userPos + 1) % len(offlineUsers)
+					}
 				}
 				if !isMainScreen && len(currentChatData.messages) > (height-FIXED) {
 					if messageScroll < len(currentChatData.messages)-(height-FIXED) {
@@ -372,14 +454,57 @@ func Start(userName string, url url.URL) error {
 					}
 				}
 			}
+			if event.KeyType == KEY_TYPE_LEFT_ARROW {
+				if isMainScreen {
+					chosenTab = (3 + chosenTab - 1) % 3
+					userPos = 0
+				}
+			}
+			if event.KeyType == KEY_TYPE_RIGHT_ARROW {
+				if isMainScreen {
+					chosenTab = (3 + chosenTab + 1) % 3
+					userPos = 0
+				}
+			}
+
 			if event.KeyType == KEY_TYPE_ENTER {
-				if isMainScreen && len(users) > 0 {
-					chosenUser = users[userPos]
-					isMainScreen = false
-					data := messages[chosenUser]
-					data.unread = 0
-					messages[chosenUser] = data
-					currentChatData = data
+				if isMainScreen {
+					if chosenTab == 0 && len(unreadUsers) > 0 {
+						chosenUser = unreadUsers[userPos]
+						isMainScreen = false
+						data := messages[chosenUser]
+						data.unread = 0
+						messages[chosenUser] = data
+						currentChatData = data
+						// mark as read
+						newUnread := make([]string, 0, len(unreadUsers)-1)
+						for _, v := range unreadUsers {
+							if v == chosenUser {
+								continue
+							}
+							newUnread = append(newUnread, v)
+						}
+						unreadUsers = newUnread
+						if activeUsers[chosenUser] {
+							onlineUsers = append(onlineUsers, chosenUser)
+						} else {
+							offlineUsers = append(offlineUsers, chosenUser)
+						}
+					} else if chosenTab == 1 && len(onlineUsers) > 0 {
+						chosenUser = onlineUsers[userPos]
+						isMainScreen = false
+						data := messages[chosenUser]
+						data.unread = 0
+						messages[chosenUser] = data
+						currentChatData = data
+					} else if chosenTab == 2 && len(offlineUsers) > 0 {
+						chosenUser = offlineUsers[userPos]
+						isMainScreen = false
+						data := messages[chosenUser]
+						data.unread = 0
+						messages[chosenUser] = data
+						currentChatData = data
+					}
 				}
 				if !isMainScreen && len(currentText) > 0 {
 					data := messages[chosenUser]
@@ -417,13 +542,13 @@ func Start(userName string, url url.URL) error {
 				return nil
 			}
 			if event.Type == server.BROADCAST_TYPE {
+				unreadUsers = []string{}
+				onlineUsers = []string{}
+				offlineUsers = []string{}
 				activeUsers = make(map[string]bool)
-				users = event.Users
-				if len(users) <= 1 {
-					users = []string{}
-				} else {
-					filtered := make([]string, 0, len(users)-1)
-					for _, v := range users {
+				if len(event.Users) > 1 {
+					filtered := make([]string, 0, len(event.Users)-1)
+					for _, v := range event.Users {
 						if v == userName {
 							continue
 						}
@@ -433,8 +558,39 @@ func Start(userName string, url url.URL) error {
 						filtered = append(filtered, v)
 						activeUsers[v] = true
 					}
-					users = filtered
-					sort.Strings(users)
+					for k, v := range messages {
+						if v.unread > 0 {
+							unreadUsers = append(unreadUsers, k)
+						} else if activeUsers[k] {
+							onlineUsers = append(onlineUsers, k)
+						} else {
+							offlineUsers = append(offlineUsers, k)
+						}
+					}
+					sort.Strings(unreadUsers)
+					sort.Strings(onlineUsers)
+					sort.Strings(offlineUsers)
+				}
+				if chosenTab == 0 {
+					if len(unreadUsers) == 0 {
+						userPos = 0
+					} else {
+						userPos = min(userPos, len(unreadUsers)-1)
+					}
+				}
+				if chosenTab == 1 {
+					if len(onlineUsers) == 0 {
+						userPos = 0
+					} else {
+						userPos = min(userPos, len(onlineUsers)-1)
+					}
+				}
+				if chosenTab == 2 {
+					if len(offlineUsers) == 0 {
+						userPos = 0
+					} else {
+						userPos = min(userPos, len(offlineUsers)-1)
+					}
 				}
 			}
 			if event.Type == server.CHAT_TYPE {
@@ -453,6 +609,44 @@ func Start(userName string, url url.URL) error {
 					currentChatData = data
 					if len(currentChatData.messages) > (height - FIXED) {
 						messageScroll = len(currentChatData.messages) - (height - FIXED)
+					}
+				}
+
+				unreadUsers = []string{}
+				onlineUsers = []string{}
+				offlineUsers = []string{}
+				for k, v := range messages {
+					if v.unread > 0 {
+						unreadUsers = append(unreadUsers, k)
+					} else if activeUsers[k] {
+						onlineUsers = append(onlineUsers, k)
+					} else {
+						offlineUsers = append(offlineUsers, k)
+					}
+				}
+				sort.Strings(unreadUsers)
+				sort.Strings(onlineUsers)
+				sort.Strings(offlineUsers)
+
+				if chosenTab == 0 {
+					if len(unreadUsers) == 0 {
+						userPos = 0
+					} else {
+						userPos = min(userPos, len(unreadUsers)-1)
+					}
+				}
+				if chosenTab == 1 {
+					if len(onlineUsers) == 0 {
+						userPos = 0
+					} else {
+						userPos = min(userPos, len(onlineUsers)-1)
+					}
+				}
+				if chosenTab == 2 {
+					if len(offlineUsers) == 0 {
+						userPos = 0
+					} else {
+						userPos = min(userPos, len(offlineUsers)-1)
 					}
 				}
 			}
