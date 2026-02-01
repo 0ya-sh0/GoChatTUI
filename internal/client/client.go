@@ -150,26 +150,27 @@ func listenKeyEvents(events chan EventKeyPress) {
 	}
 }
 
+const SEP = "──────────────────────────────────────────────────────"
+
 func printHeader(userName string) {
-	fmt.Print(Reset, Bold, "----------")
+	fmt.Print(Reset, SEP)
 	fmt.Printf(CursorPos, 2, 1)
-	fmt.Print(FgRed, "GoChatTUI (v1.0) - ", userName, Reset)
+	fmt.Print(" GoChatTUI (v1.0) - Logged in as: ", userName, Reset)
 	fmt.Printf(CursorPos, 3, 1)
-	fmt.Print(Bold, "----------")
+	fmt.Print(Reset, SEP)
 	fmt.Print(Reset)
 }
 
 func printUserName(userName string, activeUsers map[string]bool) {
 	fmt.Printf(CursorPos, 4, 1)
-	fmt.Print("(<- CTRL-C)   ")
+	fmt.Print(" Chat with - ")
 	if _, ok := activeUsers[userName]; ok {
-		fmt.Print(FgGreen, " ● ")
+		fmt.Print(FgGreen, " ● ", userName)
 	} else {
-		fmt.Print(FgGreen, " ○ ")
+		fmt.Print(Reset, " ○ ", userName)
 	}
-	fmt.Print(userName)
 	fmt.Printf(CursorPos, 5, 1)
-	fmt.Print("----------")
+	fmt.Print(Reset, SEP)
 }
 
 func listenResizeEvents(events chan int) {
@@ -193,16 +194,22 @@ func listenResizeEvents(events chan int) {
 }
 
 func printCurrentText(currentText string, height int) {
-	fmt.Printf(CursorPos, height-1, 1)
-	fmt.Print(Reset, "----------")
-	fmt.Printf(CursorPos, height, 1)
+	fmt.Printf(CursorPos, height-3, 1)
+	fmt.Print(Reset, SEP)
+	fmt.Printf(CursorPos, height-2, 1)
 	if currentText == "" {
-		fmt.Print(BgBlack, FgMagenta, "Enter text... (Enter) to send")
+		fmt.Print(" > enter message... ")
 	} else {
-		fmt.Print(BgBlack, FgWhite, currentText)
+		fmt.Print(" > ", currentText)
 	}
+	fmt.Printf(CursorPos, height-1, 1)
+	fmt.Print(Reset, SEP)
+	fmt.Printf(CursorPos, height, 1)
+	fmt.Print("↑ ↓ scroll chat     Enter: Send     Ctrl+C: Back")
 	fmt.Print(Reset)
 }
+
+const FIXED = 9
 
 func printUsers(users []string, userPos int, messages map[string]ChatData) {
 	i := 6
@@ -210,20 +217,30 @@ func printUsers(users []string, userPos int, messages map[string]ChatData) {
 		fmt.Print(Reset)
 		if pos == userPos {
 			fmt.Printf(CursorPos, i, 1)
-			fmt.Print(Bold, BgBlack, FgRed, "▶ ")
+			fmt.Print(Bold, "▶ ")
 		} else {
 			fmt.Printf(CursorPos, i, 3)
 		}
 		i++
-		fmt.Print(FgRed, v, " (", messages[v].unread, ")")
+		fmt.Print(v, " (", messages[v].unread, ")")
 	}
 	fmt.Print(Reset)
 }
 
-func printMessages(userName string, data ChatData, height, messageScroll int) {
+func printMessages(userName, chosenUser string, data ChatData, height, messageScroll int) {
 	line := 6
 	start := messageScroll
-	end := min(len(data.messages), messageScroll+(height-7))
+	end := min(len(data.messages), messageScroll+(height-FIXED))
+	unamePad := max(3, len(chosenUser)) - 3
+	youPad := false
+	if len(chosenUser) <= 3 {
+		youPad = false
+		unamePad = 3 - len(chosenUser)
+	} else {
+		youPad = true
+		unamePad = len(chosenUser) - 3
+	}
+
 	for curr := start; curr < end; curr++ {
 		v := data.messages[curr]
 		fmt.Print(Reset)
@@ -231,9 +248,21 @@ func printMessages(userName string, data ChatData, height, messageScroll int) {
 		line++
 		v.Timestamp.Format(time.RFC822)
 		if v.FromUserName == userName {
-			fmt.Print(FgGreen, v.Timestamp.Format(time.DateOnly+" "+time.TimeOnly), " ", "(You): ", Reset, v.Content)
+			fmt.Print(FgGreen, v.Timestamp.Format(time.DateOnly+" "+time.TimeOnly), " ", "you")
+			if youPad {
+				for i := 0; i < unamePad; i++ {
+					fmt.Print(" ")
+				}
+			}
+			fmt.Print(": ", Reset, v.Content)
 		} else {
-			fmt.Print(FgRed, v.Timestamp.Format(time.DateOnly+" "+time.TimeOnly), " ", v.FromUserName, ": ", Reset, v.Content)
+			fmt.Print(FgRed, v.Timestamp.Format(time.DateOnly+" "+time.TimeOnly), " ", v.FromUserName)
+			if !youPad {
+				for i := 0; i < unamePad; i++ {
+					fmt.Print(" ")
+				}
+			}
+			fmt.Print(": ", Reset, v.Content)
 		}
 	}
 }
@@ -283,7 +312,7 @@ func Start(userName string, url url.URL) error {
 			printUsers(users, userPos, messages)
 		} else {
 			printUserName(chosenUser, activeUsers)
-			printMessages(userName, currentChatData, height, messageScroll)
+			printMessages(userName, chosenUser, currentChatData, height, messageScroll)
 			printCurrentText(currentText, height)
 		}
 		select {
@@ -301,10 +330,10 @@ func Start(userName string, url url.URL) error {
 			}
 			/*
 
-				available height for messages = height - 7
+				available height for messages = height - FIXED
 				number of messages = len(messages)
 				scroll pos determines what first message is seen
-				i.e if we want to show message i to i + (height-7)
+				i.e if we want to show message i to i + (height-FIXED)
 				scroll is i
 				lowerbound i can be 0 (show first message)
 				upperbound
@@ -317,7 +346,7 @@ func Start(userName string, url url.URL) error {
 					h = 20, m = 100, i 0 to 80
 
 					if h >= m, upperbound = 0
-					else upperbound = m - (h - 7)
+					else upperbound = m - (h - FIXED)
 
 				or i can be min(len(messages), )
 
@@ -327,7 +356,7 @@ func Start(userName string, url url.URL) error {
 				if isMainScreen && len(users) > 0 {
 					userPos = (len(users) + userPos - 1) % len(users)
 				}
-				if !isMainScreen && len(currentChatData.messages) > (height-7) {
+				if !isMainScreen && len(currentChatData.messages) > (height-FIXED) {
 					if messageScroll > 0 {
 						messageScroll--
 					}
@@ -337,8 +366,8 @@ func Start(userName string, url url.URL) error {
 				if isMainScreen && len(users) > 0 {
 					userPos = (len(users) + userPos + 1) % len(users)
 				}
-				if !isMainScreen && len(currentChatData.messages) > (height-7) {
-					if messageScroll < len(currentChatData.messages)-(height-7) {
+				if !isMainScreen && len(currentChatData.messages) > (height-FIXED) {
+					if messageScroll < len(currentChatData.messages)-(height-FIXED) {
 						messageScroll++
 					}
 				}
@@ -365,8 +394,8 @@ func Start(userName string, url url.URL) error {
 					currentText = ""
 					conn.WriteJSON(localMessage)
 					currentChatData = data
-					if len(currentChatData.messages) > (height - 7) {
-						messageScroll = len(currentChatData.messages) - (height - 7)
+					if len(currentChatData.messages) > (height - FIXED) {
+						messageScroll = len(currentChatData.messages) - (height - FIXED)
 					}
 				}
 
@@ -422,8 +451,8 @@ func Start(userName string, url url.URL) error {
 				} else {
 					messages[event.FromUserName] = data
 					currentChatData = data
-					if len(currentChatData.messages) > (height - 7) {
-						messageScroll = len(currentChatData.messages) - (height - 7)
+					if len(currentChatData.messages) > (height - FIXED) {
+						messageScroll = len(currentChatData.messages) - (height - FIXED)
 					}
 				}
 			}
