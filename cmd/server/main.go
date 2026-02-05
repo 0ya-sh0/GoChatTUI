@@ -8,11 +8,9 @@ import (
 )
 
 func main() {
-	http.HandleFunc("/ws", server.ProcessWsConnect)
-	go server.ProcessNoNameConns()
-	go server.ProcessJoinUser()
-	go server.ProcessSendChatMessage()
-	go server.ProcessCloseUser()
+	broker := server.NewBroker()
+	broker.Start()
+	http.HandleFunc("/ws", broker.ProcessWsConnect)
 	log.Print("start on localhost:8123")
 	http.ListenAndServe("localhost:8123", nil)
 }
