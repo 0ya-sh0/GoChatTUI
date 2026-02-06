@@ -1,5 +1,13 @@
 package client
 
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"golang.org/x/term"
+)
+
 const (
 	ESC = "\x1b"
 
@@ -55,3 +63,41 @@ const (
 	ANSI_ENTER_ALT_SCREEN = "\x1b[?1049h"
 	ANSI_EXIT_ALT_SCREEN  = "\x1b[?1049l"
 )
+
+func listenResizeEvents(events chan int) {
+	_, height, err := term.GetSize(int(os.Stdin.Fd()))
+	if err != nil {
+		close(events)
+		return
+	}
+	for {
+		time.Sleep(time.Millisecond * 500)
+		_, newHeight, err := term.GetSize(int(os.Stdin.Fd()))
+		if err != nil {
+			close(events)
+			return
+		}
+		if newHeight != height {
+			height = newHeight
+			events <- height
+		}
+	}
+}
+
+var oldState *term.State
+
+func SetupTerminal() error {
+	state, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		return err
+	}
+	oldState = state
+	fmt.Print(ANSI_ENTER_ALT_SCREEN)
+	return nil
+}
+
+func RestoreTerminal() {
+	fmt.Print(ClearScreen, CursorHome, CursorShow)
+	fmt.Print(ANSI_EXIT_ALT_SCREEN)
+	term.Restore(int(os.Stdin.Fd()), oldState)
+}
