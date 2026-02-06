@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/0ya-sh0/GoChatTUI/internal/server"
+	"github.com/0ya-sh0/GoChatTUI/internal/protocol"
 	"github.com/gorilla/websocket"
 	"golang.org/x/term"
 )
@@ -19,8 +19,8 @@ func connect(userName string, url url.URL) (*websocket.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	message := server.UserNameMessage{
-		UserName: userName,
+	message := protocol.ClaimUsernameRequest{
+		Username: userName,
 	}
 	err = c.WriteJSON(&message)
 	if err != nil {
@@ -49,7 +49,7 @@ type EventKeyPress struct {
 	Char    byte
 }
 
-func listenWSEvents(events chan server.MessageToClient, conn *websocket.Conn) {
+func listenWSEvents(events chan protocol.Message, conn *websocket.Conn) {
 	for {
 		event, err := readMessage(conn)
 		if err != nil {
@@ -60,8 +60,8 @@ func listenWSEvents(events chan server.MessageToClient, conn *websocket.Conn) {
 	}
 }
 
-func readMessage(conn *websocket.Conn) (server.MessageToClient, error) {
-	message := server.MessageToClient{}
+func readMessage(conn *websocket.Conn) (protocol.Message, error) {
+	message := protocol.Message{}
 	err := conn.ReadJSON(&message)
 	return message, err
 }
@@ -350,7 +350,7 @@ func Start(userName string, url url.URL) error {
 	defer conn.Close()
 
 	keyEvents := make(chan EventKeyPress)
-	wsEvents := make(chan server.MessageToClient)
+	wsEvents := make(chan protocol.Message)
 	resizeEvents := make(chan int)
 	messageScroll := 0
 	messages := make(map[string]ChatData)
@@ -541,7 +541,7 @@ func Start(userName string, url url.URL) error {
 			if !ok {
 				return nil
 			}
-			if event.Type == server.BROADCAST_TYPE {
+			if event.Type == protocol.MESSAGE_TYPE_BROADCAST {
 				unreadUsers = []string{}
 				onlineUsers = []string{}
 				offlineUsers = []string{}
@@ -593,19 +593,19 @@ func Start(userName string, url url.URL) error {
 					}
 				}
 			}
-			if event.Type == server.CHAT_TYPE {
-				data := messages[event.FromUserName]
+			if event.Type == protocol.MESSAGE_TYPE_CHAT {
+				data := messages[event.FromUsername]
 				data.messages = append(data.messages, Message{
-					FromUserName: event.FromUserName,
+					FromUserName: event.FromUsername,
 					ToUserName:   userName,
 					Content:      event.Content,
 					Timestamp:    event.Timestamp,
 				})
-				if isMainScreen || chosenUser != event.FromUserName {
+				if isMainScreen || chosenUser != event.FromUsername {
 					data.unread++
-					messages[event.FromUserName] = data
+					messages[event.FromUsername] = data
 				} else {
-					messages[event.FromUserName] = data
+					messages[event.FromUsername] = data
 					currentChatData = data
 					if len(currentChatData.messages) > (height - FIXED) {
 						messageScroll = len(currentChatData.messages) - (height - FIXED)

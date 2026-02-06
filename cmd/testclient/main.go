@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/0ya-sh0/GoChatTUI/internal/protocol"
 	"github.com/gorilla/websocket"
 )
 
@@ -17,11 +18,9 @@ func connect(name, to string) *websocket.Conn {
 	if err != nil {
 		log.Fatal("dial:", err)
 	}
-	type UserNameMessage struct {
-		UserName string `json:"userName"`
-	}
-	message := UserNameMessage{
-		UserName: name,
+
+	message := protocol.ClaimUsernameRequest{
+		Username: name,
 	}
 	c.WriteJSON(&message)
 
@@ -32,15 +31,12 @@ func connect(name, to string) *websocket.Conn {
 			log.Print("recv:", name, string(message), err)
 		}
 	})()
-	type ChatMessageRequest struct {
-		ToUserName string `json:"toUserName"`
-		Content    string `json:"content"`
-	}
+
 	go (func() {
 		i := 0
 		for {
-			message := ChatMessageRequest{
-				ToUserName: to,
+			message := protocol.ForwardMessageRequest{
+				ToUsername: to,
 				Content:    fmt.Sprintf("m %d", i),
 			}
 			i++

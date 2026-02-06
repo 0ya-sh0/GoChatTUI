@@ -10,7 +10,7 @@ import (
 func main() {
 	broker := server.NewBroker()
 	broker.Start()
-	http.HandleFunc("/ws", broker.ProcessWsConnect)
+	http.HandleFunc("/ws", broker.HandleWebsocketConnection)
 	log.Print("start on localhost:8123")
 	http.ListenAndServe("localhost:8123", nil)
 }
