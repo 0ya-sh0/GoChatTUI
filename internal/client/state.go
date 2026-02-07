@@ -212,7 +212,7 @@ func handleBroadcastMesasge(state *UIState, event protocol.Message) bool {
 }
 
 func handlePrintableKey(state *UIState, event EventKeyPress) bool {
-	if !state.isMainScreen && len(state.currentText) < 64 {
+	if !state.isMainScreen {
 		state.currentText = state.currentText + string(event.Char)
 		return true
 	}
