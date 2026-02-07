@@ -1,17 +1,14 @@
 package client
 
 import (
+	"os"
 	"sort"
 	"time"
 
 	"github.com/0ya-sh0/GoChatTUI/internal/protocol"
 	"github.com/gorilla/websocket"
+	"golang.org/x/term"
 )
-
-type ChatData struct {
-	unread   int
-	messages []protocol.Message
-}
 
 type UIState struct {
 	username        string
@@ -21,7 +18,7 @@ type UIState struct {
 	onlineUsers     []string
 	offlineUsers    []string
 	userPos         int
-	messages        map[string]ChatData
+	chats           map[string]ChatData
 	chosenTab       int
 	height          int
 	chosenUser      string
@@ -30,6 +27,30 @@ type UIState struct {
 	messageScroll   int
 	currentText     string
 	exit            bool
+}
+
+func NewUIState(username string, conn *websocket.Conn) *UIState {
+	_, h, _ := term.GetSize(int(os.Stdin.Fd()))
+	persistedState := loadState(username)
+	state := &UIState{
+		username:        username,
+		conn:            conn,
+		unreadUsers:     []string{},
+		onlineUsers:     []string{},
+		offlineUsers:    []string{},
+		messageScroll:   0,
+		chats:           persistedState.Chats,
+		activeUsers:     make(map[string]bool),
+		userPos:         0,
+		isMainScreen:    true,
+		chosenUser:      "",
+		currentText:     "",
+		currentChatData: ChatData{},
+		chosenTab:       0,
+		height:          h,
+		exit:            false,
+	}
+	return state
 }
 
 func handleResize(state *UIState, newHeight int) bool {
@@ -45,6 +66,9 @@ func handleWSMessage(state *UIState, event protocol.Message) bool {
 	if event.Type == protocol.MESSAGE_TYPE_CHAT {
 		requireRender = handleChatMesasge(state, event)
 	}
+	writeState(PersistedState{
+		Username: state.username, Chats: state.chats,
+	})
 	return requireRender
 }
 
@@ -52,8 +76,8 @@ func updateTabLists(state *UIState) {
 	state.unreadUsers = []string{}
 	state.onlineUsers = []string{}
 	state.offlineUsers = []string{}
-	for k, v := range state.messages {
-		if v.unread > 0 {
+	for k, v := range state.chats {
+		if v.Unread > 0 {
 			state.unreadUsers = append(state.unreadUsers, k)
 		} else if state.activeUsers[k] {
 			state.onlineUsers = append(state.onlineUsers, k)
@@ -110,9 +134,9 @@ Otherwise, upper bound = m - (h - FIXED).
 */
 func updateChatScroll(state *UIState, delta int) bool {
 	messageListHeight := state.height - FIXED
-	maximumStart := len(state.currentChatData.messages) - messageListHeight
+	maximumStart := len(state.currentChatData.Messages) - messageListHeight
 	prevMessageScroll := state.messageScroll
-	if len(state.currentChatData.messages) > messageListHeight {
+	if len(state.currentChatData.Messages) > messageListHeight {
 		if delta == 0 {
 			state.messageScroll = maximumStart
 		} else {
@@ -135,8 +159,8 @@ func updateChosenTabAndUserPos(state *UIState, delta int) bool {
 
 func handleChatMesasge(state *UIState, event protocol.Message) bool {
 	requireRender := true
-	data := state.messages[event.FromUsername]
-	data.messages = append(data.messages, protocol.Message{
+	data := state.chats[event.FromUsername]
+	data.Messages = append(data.Messages, protocol.Message{
 		FromUsername: event.FromUsername,
 		ToUsername:   event.ToUsername,
 		Content:      event.Content,
@@ -152,10 +176,10 @@ func handleChatMesasge(state *UIState, event protocol.Message) bool {
 	}
 
 	if state.isMainScreen || state.chosenUser != event.FromUsername {
-		data.unread++
-		state.messages[event.FromUsername] = data
+		data.Unread++
+		state.chats[event.FromUsername] = data
 	} else {
-		state.messages[event.FromUsername] = data
+		state.chats[event.FromUsername] = data
 		state.currentChatData = data
 		updateChatScroll(state, 0)
 	}
@@ -175,8 +199,8 @@ func handleBroadcastMesasge(state *UIState, event protocol.Message) bool {
 			if v == state.username {
 				continue
 			}
-			if _, ok := state.messages[v]; !ok {
-				state.messages[v] = ChatData{}
+			if _, ok := state.chats[v]; !ok {
+				state.chats[v] = ChatData{}
 			}
 			filtered = append(filtered, v)
 			state.activeUsers[v] = true
@@ -280,9 +304,9 @@ func handleEnter(state *UIState) bool {
 		}
 		state.chosenUser = chosenList[state.userPos]
 		state.isMainScreen = false
-		data := state.messages[state.chosenUser]
-		data.unread = 0
-		state.messages[state.chosenUser] = data
+		data := state.chats[state.chosenUser]
+		data.Unread = 0
+		state.chats[state.chosenUser] = data
 		state.currentChatData = data
 		if state.chosenTab == 0 {
 			// mark as read
@@ -305,21 +329,24 @@ func handleEnter(state *UIState) bool {
 	if len(state.currentText) == 0 {
 		return false
 	}
-	data := state.messages[state.chosenUser]
+	data := state.chats[state.chosenUser]
 	localMessage := protocol.Message{
 		FromUsername: state.username,
 		ToUsername:   state.chosenUser,
 		Content:      state.currentText,
 		Timestamp:    time.Now(),
 	}
-	data.messages = append(data.messages, localMessage)
-	state.messages[state.chosenUser] = data
+	data.Messages = append(data.Messages, localMessage)
+	state.chats[state.chosenUser] = data
 	state.currentText = ""
 	if err := writeMessage(state.conn, localMessage); err != nil {
 		state.conn.Close()
 		state.exit = true
 		return false
 	}
+	writeState(PersistedState{
+		Username: state.username, Chats: state.chats,
+	})
 	state.currentChatData = data
 	updateChatScroll(state, 0)
 	return true

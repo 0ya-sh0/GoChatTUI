@@ -9,7 +9,7 @@ func render(state *UIState) {
 	fmt.Print(ClearScreen, CursorHome, CursorHide)
 	printHeader(state.username)
 	if state.isMainScreen {
-		printUsers(state.unreadUsers, state.onlineUsers, state.offlineUsers, state.userPos, state.messages, state.chosenTab, state.height)
+		printUsers(state.unreadUsers, state.onlineUsers, state.offlineUsers, state.userPos, state.chats, state.chosenTab, state.height)
 	} else {
 		printUserName(state.chosenUser, state.activeUsers)
 		printMessages(state.username, state.chosenUser, state.currentChatData, state.height, state.messageScroll)
@@ -86,7 +86,7 @@ func printUsers(unreadUsers, onlineUsers, offlineUsers []string, userPos int, me
 			}
 			fmt.Print(v)
 			fmt.Printf(CursorPos, line, 12)
-			fmt.Print("(", messages[v].unread, ")")
+			fmt.Print("(", messages[v].Unread, ")")
 			line++
 		}
 	}
@@ -126,7 +126,7 @@ func printUsers(unreadUsers, onlineUsers, offlineUsers []string, userPos int, me
 func printMessages(userName, chosenUser string, data ChatData, height, messageScroll int) {
 	line := 6
 	start := messageScroll
-	end := min(len(data.messages), messageScroll+(height-FIXED))
+	end := min(len(data.Messages), messageScroll+(height-FIXED))
 	unamePad := max(3, len(chosenUser)) - 3
 	youPad := false
 	if len(chosenUser) <= 3 {
@@ -138,7 +138,7 @@ func printMessages(userName, chosenUser string, data ChatData, height, messageSc
 	}
 
 	for curr := start; curr < end; curr++ {
-		v := data.messages[curr]
+		v := data.Messages[curr]
 		fmt.Print(Reset)
 		fmt.Printf(CursorPos, line, 1)
 		line++
