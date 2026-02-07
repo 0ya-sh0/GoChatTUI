@@ -12,18 +12,15 @@ import (
 var wsUpgrader = websocket.Upgrader{}
 
 func (b *Broker) HandleWebsocketConnection(w http.ResponseWriter, r *http.Request) {
-	log.Print("req connection")
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print("err upgrade:", err)
 		return
 	}
-	log.Print("req connection waiting for username req")
 	go waitForUsernameClaim(conn, b.joinUserRequests)
 }
 
 func waitForUsernameClaim(conn *websocket.Conn, joinUserRequests chan<- JoinUserRequest) {
-	log.Print("waiting for conn2")
 	claimedUsername := make(chan *protocol.ClaimUsernameRequest)
 	defer close(claimedUsername)
 
@@ -83,7 +80,6 @@ func messageReciever(conn *websocket.Conn, outbox chan<- protocol.Message, usern
 			kickOutUser <- username
 			break
 		}
-		log.Print(username, message)
 		outbox <- protocol.Message{
 			Type:         protocol.MESSAGE_TYPE_CHAT,
 			FromUsername: username,

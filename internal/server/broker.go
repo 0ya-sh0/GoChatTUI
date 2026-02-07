@@ -1,6 +1,8 @@
 package server
 
 import (
+	"log"
+
 	"github.com/0ya-sh0/GoChatTUI/internal/protocol"
 	"github.com/gorilla/websocket"
 )
@@ -74,6 +76,7 @@ func (b *Broker) handleJoinUserRequest(request JoinUserRequest) {
 	if _, has := b.users[request.username]; has {
 		request.conn.Close()
 	} else {
+		log.Print("join user: ", request.username)
 		messageBox := make(chan interface{}, 1024)
 		joinedUser := User{
 			username:   request.username,
@@ -112,5 +115,6 @@ func (b *Broker) handleKickOutUser(username string) {
 		close(user.messageBox)
 		delete(b.users, username)
 		b.broadcast()
+		log.Print("kick user: ", username)
 	}
 }
