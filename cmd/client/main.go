@@ -9,12 +9,13 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatal("Username is required: $ ./client user123")
+	if len(os.Args) < 3 {
+		log.Fatal("Username and server is required: $ ./client localhost:8123 user123")
 		return
 	}
-	url := url.URL{Scheme: "ws", Host: "localhost:8123", Path: "/ws"}
-	username := os.Args[1]
+	host := os.Args[1]
+	url := url.URL{Scheme: "ws", Host: host, Path: "/ws"}
+	username := os.Args[2]
 
 	if err := client.SetupTerminal(); err != nil {
 		log.Fatal(err)
